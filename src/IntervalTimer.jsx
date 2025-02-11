@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Play, Pause, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { Howl } from "howler"; // Import Howle
 
 const IntervalTimer = () => {
   const [inputs, setInputs] = useState({
@@ -13,8 +14,6 @@ const IntervalTimer = () => {
   const [currentRep, setCurrentRep] = useState(0);
   const [totalTime, setTotalTime] = useState(0);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
-  const [audioContext, setAudioContext] = useState(null);
-  // Add new state for total elapsed time
   const [elapsedTime, setElapsedTime] = useState(0);
 
   // Speech synthesis setup
@@ -54,65 +53,32 @@ const IntervalTimer = () => {
     [speechSynthesis, isSoundEnabled]
   );
 
-  // Audio Context setup
-  useEffect(() => {
-    const context = new (window.AudioContext || window.webkitAudioContext)();
-    setAudioContext(context);
-    return () => {
-      context.close();
-    };
-  }, []);
-
-  // Sound generation functions
+  // Sound generation functions using Howler
   const playTick = useCallback(() => {
-    if (!audioContext || !isSoundEnabled) return;
+    if (!isSoundEnabled) return;
 
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
+    const tickSound = new Howl({
+      src: ["./Tick.mp3"], // Path to your tick sound
+      volume: 1.0,
+    });
 
-    osc.connect(gain);
-    gain.connect(audioContext.destination);
-
-    osc.frequency.setValueAtTime(800, audioContext.currentTime);
-    gain.gain.setValueAtTime(0.1, audioContext.currentTime);
-    gain.gain.exponentialRampToValueAtTime(
-      0.001,
-      audioContext.currentTime + 0.1
-    );
-
-    osc.start();
-    osc.stop(audioContext.currentTime + 0.1);
-  }, [audioContext, isSoundEnabled]);
+    tickSound.play();
+  }, [isSoundEnabled]);
 
   const playPhaseChange = useCallback(
     (isRunPhase) => {
-      if (!audioContext || !isSoundEnabled) return;
+      if (!isSoundEnabled) return;
 
-      const osc = audioContext.createOscillator();
-      const gain = audioContext.createGain();
+      const phaseSound = new Howl({
+        src: [
+          isRunPhase ? "./RUN.mp3" : "./WALK.mp3", // Path to run/walk sound
+        ],
+        volume: 1.0,
+      });
 
-      osc.connect(gain);
-      gain.connect(audioContext.destination);
-
-      osc.frequency.setValueAtTime(
-        isRunPhase ? 880 : 440,
-        audioContext.currentTime
-      );
-      gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(
-        0.001,
-        audioContext.currentTime + 0.5
-      );
-
-      osc.start();
-      osc.stop(audioContext.currentTime + 0.5);
-
-      // Announce the phase after the tone
-      setTimeout(() => {
-        announcePhase(isRunPhase ? "RUN" : "WALK");
-      }, 500);
+      phaseSound.play();
     },
-    [audioContext, isSoundEnabled, announcePhase]
+    [isSoundEnabled]
   );
 
   // Timer logic with sound and voice
@@ -121,7 +87,7 @@ const IntervalTimer = () => {
     if (isRunning && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft((prev) => {
-          // Play tick sound for last 5 seconds
+          // Play tick sound for the last 5 seconds
           if (prev <= 6 && prev > 1) {
             playTick();
           }
@@ -133,7 +99,7 @@ const IntervalTimer = () => {
         if (currentRep < parseInt(inputs.repetitions)) {
           setCurrentPhase("WALK");
           setTimeLeft(parseInt(inputs.walkTime));
-          playPhaseChange(false);
+          playPhaseChange(false); // Play walk sound for the next phase
         } else {
           handleReset();
           announcePhase("Workout Complete");
@@ -143,7 +109,7 @@ const IntervalTimer = () => {
         if (currentRep + 1 < parseInt(inputs.repetitions)) {
           setCurrentPhase("RUN");
           setTimeLeft(parseInt(inputs.runTime));
-          playPhaseChange(true);
+          playPhaseChange(true); // Play run sound for the next phase
         } else {
           handleReset();
           announcePhase("Workout Complete");
@@ -162,7 +128,6 @@ const IntervalTimer = () => {
     announcePhase,
   ]);
 
-  // Previous helper functions
   const validateInputs = () => {
     const { runTime, walkTime, repetitions } = inputs;
     if (!runTime || !walkTime || !repetitions) return false;
@@ -195,10 +160,9 @@ const IntervalTimer = () => {
       setTimeLeft(parseInt(inputs.runTime));
       setTotalTime(parseInt(inputs.runTime) + parseInt(inputs.walkTime));
       setElapsedTime(0); // Reset elapsed time when starting new workout
-      // Slight delay for initial announcement
       setTimeout(() => {
-        playPhaseChange(true);
-      }, 500);
+        playPhaseChange(true); // Play sound for the start of the workout
+      }, 300);
     }
     setIsRunning(true);
   };
@@ -215,7 +179,6 @@ const IntervalTimer = () => {
     setCurrentPhase("SETUP");
     setCurrentRep(0);
     setTimeLeft(0);
-    //setElapsedTime(0); // Reset elapsed time
     setInputs({ runTime: "", walkTime: "", repetitions: "" });
     if (isSoundEnabled && currentPhase !== "SETUP") {
       announcePhase("Reset");
